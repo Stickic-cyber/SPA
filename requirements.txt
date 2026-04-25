@@ -1,0 +1,8 @@
+flask
+numpy
+pandas
+matplotlib
+opencv-python
+mediapipe
+scipy
+ultralytics
