@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>投篮动作分析可视化</title>
+  <style>
+    :root {
+      --bg: #f6f0e6;
+      --panel: rgba(255, 250, 242, 0.86);
+      --panel-solid: #fffaf2;
+      --line: rgba(21, 51, 57, 0.12);
+      --text: #163137;
+      --muted: #667a77;
+      --accent: #0f766e;
+      --accent-deep: #0b5c56;
+      --accent-soft: #d8f1ec;
+      --warm: #ef8a17;
+      --danger: #b42318;
+      --shadow: 0 20px 50px rgba(22, 49, 55, 0.12);
+      --radius: 24px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: "Aptos", "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(239, 138, 23, 0.14), transparent 24%),
+        radial-gradient(circle at top right, rgba(15, 118, 110, 0.16), transparent 26%),
+        linear-gradient(180deg, #f9f4eb 0%, #f0e7da 100%);
+    }
+
+    .page {
+      width: min(1320px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 20px 0 48px;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 1.2fr 1.8fr;
+      gap: 18px;
+      align-items: stretch;
+      margin-bottom: 22px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      box-shadow: var(--shadow);
+    }
+
+    .brand-card {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background:
+        linear-gradient(135deg, rgba(15, 118, 110, 0.96), rgba(11, 92, 86, 0.9));
+      color: #f7fffd;
+    }
+
+    .brand-card h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.2rem, 2vw, 1.7rem);
+      line-height: 1.1;
+      letter-spacing: 0.02em;
+    }
+
+    .brand-card p {
+      margin: 0;
+      color: rgba(247, 255, 253, 0.88);
+      line-height: 1.65;
+      font-size: 0.95rem;
+    }
+
+    .upload-card {
+      padding: 20px 22px;
+    }
+
+    .upload-card h2 {
+      margin: 0 0 8px;
+      font-size: 1.15rem;
+    }
+
+    .upload-card p {
+      margin: 0 0 16px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    input[type="file"] {
+      flex: 1 1 320px;
+      min-width: 220px;
+      padding: 12px 14px;
+      border: 1px dashed rgba(22, 49, 55, 0.24);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--muted);
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 13px 22px;
+      font: inherit;
+      font-weight: 700;
+      color: #fffdfa;
+      background: linear-gradient(135deg, var(--warm), #e96c00);
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+      box-shadow: 0 12px 24px rgba(233, 108, 0, 0.24);
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: 0.66;
+      cursor: wait;
+    }
+
+    .status {
+      margin-top: 14px;
+      min-height: 28px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(15, 118, 110, 0.08);
+      color: var(--accent-deep);
+      font-weight: 600;
+    }
+
+    .status.error {
+      background: rgba(180, 35, 24, 0.08);
+      color: var(--danger);
+    }
+
+    .pulse {
+      display: inline-flex;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 8px;
+      background: var(--warm);
+      box-shadow: 0 0 0 rgba(239, 138, 23, 0.4);
+      animation: pulse 1.5s infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(239, 138, 23, 0.44); }
+      70% { box-shadow: 0 0 0 12px rgba(239, 138, 23, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 138, 23, 0); }
+    }
+
+    .results {
+      display: none;
+      gap: 22px;
+    }
+
+    .results.visible {
+      display: grid;
+    }
+
+    .priority-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 2.2fr) minmax(280px, 0.9fr);
+      gap: 22px;
+      align-items: start;
+    }
+
+    .video-card {
+      padding: 18px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(216, 241, 236, 0.34));
+    }
+
+    .video-head,
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+      margin-bottom: 12px;
+    }
+
+    .video-head h2,
+    .section-head h3,
+    .score-hero h2 {
+      margin: 0;
+    }
+
+    .video-head p,
+    .section-head p,
+    .score-hero p,
+    .metric-item span,
+    .empty-state p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .video-shell {
+      background: #0d1718;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    video {
+      width: 100%;
+      display: block;
+      background: #000;
+      min-height: 360px;
+    }
+
+    .video-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      padding-top: 12px;
+    }
+
+    .video-actions a {
+      color: var(--accent-deep);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .score-hero {
+      padding: 22px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 236, 214, 0.7));
+      position: sticky;
+      top: 16px;
+    }
+
+    .score-badge {
+      margin-top: 18px;
+      padding: 24px 20px;
+      border-radius: 22px;
+      text-align: center;
+      background:
+        radial-gradient(circle at top, rgba(15, 118, 110, 0.18), transparent 60%),
+        linear-gradient(180deg, #fffdf8 0%, #fff2df 100%);
+      border: 1px solid rgba(239, 138, 23, 0.18);
+    }
+
+    .score-badge .label {
+      display: block;
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin-bottom: 8px;
+    }
+
+    .score-badge .value {
+      display: block;
+      font-size: clamp(3rem, 8vw, 4.8rem);
+      line-height: 1;
+      font-weight: 800;
+      color: var(--accent-deep);
+    }
+
+    .score-badge .hint {
+      margin-top: 10px;
+      font-size: 0.95rem;
+    }
+
+    .score-grid,
+    .metric-grid,
+    .media-grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .score-grid {
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    .score-card,
+    .metric-item,
+    .media-card {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .score-card {
+      padding: 18px;
+    }
+
+    .score-card strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 1.8rem;
+      color: var(--accent-deep);
+    }
+
+    .section-card {
+      padding: 20px;
+    }
+
+    .metric-grid {
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      margin-top: 14px;
+    }
+
+    .metric-item {
+      padding: 16px 18px;
+    }
+
+    .metric-item label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+
+    .media-grid {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      margin-top: 14px;
+    }
+
+    .media-card {
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    .media-card h4 {
+      margin: 0 0 8px;
+      font-size: 1.02rem;
+    }
+
+    .media-card p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 0.94rem;
+    }
+
+    .media-card img {
+      width: 100%;
+      display: block;
+      border-radius: 14px;
+      background: #f8fbfa;
+      border: 1px solid rgba(22, 49, 55, 0.08);
+    }
+
+    .empty-state {
+      padding: 40px 26px;
+      text-align: center;
+    }
+
+    @media (max-width: 980px) {
+      .topbar,
+      .priority-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .score-hero {
+        position: static;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .page {
+        width: min(100% - 18px, 1320px);
+        padding-top: 14px;
+      }
+
+      .brand-card,
+      .upload-card,
+      .section-card,
+      .score-hero,
+      .video-card {
+        padding: 16px;
+      }
+
+      video {
+        min-height: 220px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="topbar">
+      <div class="card brand-card">
+        <h1>投篮动作分析可视化面板</h1>
+        <p>上传投篮视频后，页面会展示结果视频、综合总分、评分雷达图，以及关节角度原始和平滑后的变化图。</p>
+      </div>
+
+      <div class="card upload-card">
+        <h2>上传分析视频</h2>
+        <p>建议使用单次投篮片段。分析完成后，结果视频和综合总分会优先显示在页面最显眼的位置。</p>
+        <form id="analyze-form" class="controls">
+          <input id="video-input" type="file" name="video" accept="video/*" required />
+          <button id="submit-btn" type="submit">开始分析</button>
+        </form>
+        <div id="status-box" class="status">请选择视频后开始分析。</div>
+      </div>
+    </section>
+
+    <div id="empty-state" class="card empty-state">
+      <h3>结果会显示在这里</h3>
+      <p>完成分析后，页面会先展示结果视频和综合总分，然后再展示各项评分、关键指标和其余图表。</p>
+    </div>
+
+    <section id="results" class="results">
+      <div class="priority-grid">
+        <article class="card video-card">
+          <div class="video-head">
+            <div>
+              <h2>结果视频</h2>
+              <p>主展示区优先显示分析后的视频结果。</p>
+            </div>
+          </div>
+          <div class="video-shell">
+            <video id="result-video" controls playsinline preload="metadata">
+              你的浏览器暂不支持视频播放。
+            </video>
+          </div>
+          <div class="video-actions">
+            <a id="video-open-link" href="#" target="_blank" rel="noopener noreferrer">新窗口打开视频</a>
+            <span>如果当前浏览器内嵌播放仍不可用，可以用上面的链接直接打开结果视频。</span>
+          </div>
+        </article>
+
+        <aside class="card score-hero">
+          <h2>综合总分</h2>
+          <p>这是当前视频的最终评分，会固定显示在结果区右侧。</p>
+          <div class="score-badge">
+            <span class="label">Final Score</span>
+            <span id="final-score-value" class="value">--</span>
+            <p class="hint">结果视频和总分被放到最显眼的位置，便于快速查看分析结论。</p>
+          </div>
+        </aside>
+      </div>
+
+      <div class="card section-card">
+        <div class="section-head">
+          <div>
+            <h3>分项评分</h3>
+            <p>除综合总分外，其余评分在这里汇总展示。</p>
+          </div>
+        </div>
+        <div id="score-grid" class="score-grid"></div>
+      </div>
+
+      <div class="card section-card">
+        <div class="section-head">
+          <div>
+            <h3>关键指标</h3>
+            <p>包含视野占比、出手估计参数和稳定性统计。</p>
+          </div>
+        </div>
+        <div id="metric-grid" class="metric-grid"></div>
+      </div>
+
+      <div class="card section-card">
+        <div class="section-head">
+          <div>
+            <h3>图表结果</h3>
+            <p>其余图像结果统一放在这里，避免和主视频区争抢注意力。</p>
+          </div>
+        </div>
+        <div id="media-grid" class="media-grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("analyze-form");
+    const input = document.getElementById("video-input");
+    const submitBtn = document.getElementById("submit-btn");
+    const statusBox = document.getElementById("status-box");
+    const results = document.getElementById("results");
+    const emptyState = document.getElementById("empty-state");
+    const scoreGrid = document.getElementById("score-grid");
+    const metricGrid = document.getElementById("metric-grid");
+    const mediaGrid = document.getElementById("media-grid");
+    const resultVideo = document.getElementById("result-video");
+    const videoOpenLink = document.getElementById("video-open-link");
+    const finalScoreValue = document.getElementById("final-score-value");
+
+    let pollTimer = null;
+
+    const scoreLabels = {
+      shoot_view_score: "投篮视野",
+      angle_score: "角度与力度",
+      shooting_form_score: "准备姿势",
+      stability_score: "上身稳定性",
+      power_sequence_score: "发力顺序"
+    };
+
+    const mediaConfig = [
+      { key: "radar_chart", title: "评分雷达图", desc: "五项评分和综合得分的可视化雷达图。" },
+      { key: "raw_joint_angles_chart", title: "关节角度变化图", desc: "原始关节角度随时间变化的总览。" },
+      { key: "smoothed_joint_angles_chart", title: "平滑后关节角度图", desc: "对异常值处理并平滑后的关节角度变化图。" },
+      { key: "power_sequence_chart", title: "发力顺序分析图", desc: "关节角度与角加速度的联合分析图。" },
+      { key: "trajectory_chart", title: "轨迹模拟图", desc: "根据估计出手参数生成的篮球轨迹模拟图。" }
+    ];
+
+    function setStatus(message, type = "normal", loading = false) {
+      statusBox.className = `status${type === "error" ? " error" : ""}`;
+      statusBox.innerHTML = `${loading ? '<span class="pulse"></span>' : ""}${message}`;
+    }
+
+    function formatValue(value) {
+      if (Array.isArray(value)) {
+        return value.length ? value.map(v => Number(v).toFixed(2)).join(" ~ ") : "暂无";
+      }
+      if (typeof value === "number") {
+        return Number.isInteger(value) ? String(value) : value.toFixed(2);
+      }
+      if (value === null || value === undefined || value === "") {
+        return "暂无";
+      }
+      return String(value);
+    }
+
+    function renderScores(scores) {
+      scoreGrid.innerHTML = "";
+      Object.entries(scoreLabels).forEach(([key, label]) => {
+        const card = document.createElement("div");
+        card.className = "score-card";
+        card.innerHTML = `<span>${label}</span><strong>${formatValue(scores?.[key])}</strong>`;
+        scoreGrid.appendChild(card);
+      });
+    }
+
+    function renderMetrics(metrics) {
+      const metricLabels = {
+        rim_in_view_percentage: "篮筐进入视野占比 (%)",
+        initial_speed: "估计初速度",
+        initial_angle: "估计出手角度",
+        release_height: "估计出手高度",
+        upper_body_q1: "上身稳定性 Q1",
+        upper_body_median: "上身稳定性中位数",
+        upper_body_q3: "上身稳定性 Q3",
+        upper_body_iqr_percentage: "IQR 内占比 (%)",
+        recommended_angle_range: "建议出手角度区间"
+      };
+
+      metricGrid.innerHTML = "";
+      Object.entries(metricLabels).forEach(([key, label]) => {
+        const item = document.createElement("div");
+        item.className = "metric-item";
+        item.innerHTML = `<label>${label}</label><span>${formatValue(metrics?.[key])}</span>`;
+        metricGrid.appendChild(item);
+      });
+    }
+
+    function renderMedia(assets) {
+      mediaGrid.innerHTML = "";
+      mediaConfig.forEach(({ key, title, desc }) => {
+        const src = assets?.[key];
+        if (!src) return;
+
+        const wrapper = document.createElement("article");
+        wrapper.className = "media-card";
+        wrapper.innerHTML = `
+          <h4>${title}</h4>
+          <p>${desc}</p>
+          <img src="${src}?t=${Date.now()}" alt="${title}" />
+        `;
+        mediaGrid.appendChild(wrapper);
+      });
+    }
+
+    function renderPriorityArea(result) {
+      const videoSrc = result?.assets?.video;
+      finalScoreValue.textContent = formatValue(result?.scores?.final_score);
+
+      if (videoSrc) {
+        const cacheSafeSrc = `${videoSrc}?t=${Date.now()}`;
+        resultVideo.innerHTML = `<source src="${cacheSafeSrc}" type="video/mp4">`;
+        resultVideo.load();
+        videoOpenLink.href = videoSrc;
+      } else {
+        resultVideo.removeAttribute("src");
+        resultVideo.innerHTML = "";
+        videoOpenLink.href = "#";
+      }
+    }
+
+    function renderResult(result) {
+      renderPriorityArea(result);
+      renderScores(result.scores);
+      renderMetrics(result.metrics);
+      renderMedia(result.assets);
+      emptyState.style.display = "none";
+      results.classList.add("visible");
+    }
+
+    async function pollJob(jobId) {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+      }
+
+      try {
+        const response = await fetch(`/api/jobs/${jobId}`);
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || "获取任务状态失败。");
+        }
+
+        if (payload.status === "queued" || payload.status === "running") {
+          setStatus(payload.message || "分析进行中...", "normal", true);
+          pollTimer = setTimeout(() => pollJob(jobId), 2500);
+          return;
+        }
+
+        if (payload.status === "completed") {
+          setStatus("分析完成，结果已更新。");
+          submitBtn.disabled = false;
+          input.disabled = false;
+          renderResult(payload.result);
+          return;
+        }
+
+        setStatus(payload.message || "分析失败。", "error");
+        submitBtn.disabled = false;
+        input.disabled = false;
+      } catch (error) {
+        setStatus(error.message || "请求失败，请稍后重试。", "error");
+        submitBtn.disabled = false;
+        input.disabled = false;
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      if (!input.files.length) {
+        setStatus("请先选择视频文件。", "error");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      input.disabled = true;
+      results.classList.remove("visible");
+      setStatus("视频已上传，正在创建分析任务...", "normal", true);
+
+      const formData = new FormData();
+      formData.append("video", input.files[0]);
+
+      try {
+        const response = await fetch("/api/analyze", {
+          method: "POST",
+          body: formData
+        });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || "创建分析任务失败。");
+        }
+
+        setStatus("任务已创建，后端正在分析视频...", "normal", true);
+        pollJob(payload.job_id);
+      } catch (error) {
+        setStatus(error.message || "提交失败，请重试。", "error");
+        submitBtn.disabled = false;
+        input.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
