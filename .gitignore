@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+
+# Local runtime
+web_runtime/
+temp/
+
+# Datasets and generated outputs
+dataset/input/
+dataset/output/
+*.mp4
+*.avi
+
+# Large model weights
+*.pt
+*.onnx
+
+# Generated figures
+*.png
+*.jpg
+*.jpeg
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
